@@ -17,9 +17,14 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE ScopedTypeVariables #-}  -- For type signature in where clause.
 
 module TensorFlow.Examples.MNIST.Parse where
 
+import System.Random (RandomGen, randomRs, mkStdGen)
+import Debug.Trace (trace)
+
+import Data.List (take, foldl')
 import Control.Monad (when, liftM)
 import Data.Binary.Get (Get, runGet, getWord32be, getLazyByteString)
 import Data.ByteString.Lazy (toStrict, readFile)
@@ -72,6 +77,8 @@ readMNISTSamples path = do
         cols <- liftM fromIntegral getWord32be
         -- Read all of the data, then split into samples.
         pixels <- getLazyByteString $ fromIntegral $ cnt * rows * cols
+        -- Since the seed is the same for every picture, the indexed 'defects' in sensors are keeping the same.
+        -- return $ (sensorAging (mkStdGen 42) 40 . V.fromList) <$> chunksOf (rows * cols) (L.unpack pixels)
         return $ V.fromList <$> chunksOf (rows * cols) (L.unpack pixels)
 
 -- | Reads a list of MNIST labels from a file and returns them.
@@ -91,6 +98,34 @@ readMessageFromFileOrDie :: Message m => FilePath -> IO m
 readMessageFromFileOrDie path = do
     pb <- readFile path
     return $ decodeMessageOrDie $ toStrict pb
+
+addNoisy :: MNIST -> MNIST
+addNoisy m = m
+
+-- Increase or decrease value of some pixels to make it as sensor "aging"
+-- Need a better and practical model, though.
+-- 
+-- For example, sensors in one area aging faster than others.
+-- Or their value aging in a predicable way.
+--
+sensorAging :: (RandomGen g) => g -> Int -> Word8 -> MNIST -> MNIST
+sensorAging rGen num aging ms = ms'
+  where rxs = randomRs (0, 255) rGen
+        rIdxs = take num rxs
+        ms' :: MNIST
+        ms' = let (readMs, accV) = foldl' mkUpdate (ms, V.fromList []) rIdxs
+              in V.update readMs accV
+        mkUpdate :: (MNIST, V.Vector (Int, Word8)) -> Int -> (MNIST, V.Vector (Int, Word8))
+        mkUpdate (readMs, accV) rIdx = let px = (V.!) readMs rIdx
+                                           px' = updatePixel px
+                                       in (readMs, V.snoc accV (rIdx, px'))
+        updatePixel :: Word8 -> Word8
+        updatePixel px | px < aging = 0
+                       | otherwise = fromIntegral (px - aging)  -- 1 may be too small
+          
+
+shift :: MNIST -> MNIST
+shift m = m
 
 -- TODO: Write a writeMessageFromFileOrDie and read/write non-lethal
 --             versions.

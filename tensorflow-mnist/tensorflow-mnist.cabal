@@ -34,6 +34,7 @@ library
                 , text
                 , vector
                 , zlib
+                , random == 1.1
   default-language:    Haskell2010
 
 executable Main
@@ -53,6 +54,7 @@ executable Main
                , text
                , transformers
                , vector
+                , random == 1.1
 
 Test-Suite ParseTest
   default-language: Haskell2010

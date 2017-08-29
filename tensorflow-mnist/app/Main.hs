@@ -22,6 +22,8 @@ import Data.List (genericLength)
 import qualified Data.Text.IO as T
 import qualified Data.Vector as V
 
+import System.Random (mkStdGen)
+
 import qualified TensorFlow.Core as TF
 import qualified TensorFlow.Ops as TF hiding (initializedVariable, zeroInitializedVariable)
 import qualified TensorFlow.Variable as TF
@@ -137,10 +139,20 @@ main = TF.runSession $ do
                                (encodeLabelBatch testLabels)
     liftIO $ putStrLn $ "test error " ++ show (testErr * 100)
 
+    -- Aging test.
+    let testAgingImages = fmap (sensorAging (mkStdGen 42) 300 80) testImages
+    agingTestErr <- errorRate model (encodeImageBatch testAgingImages)
+                                    (encodeLabelBatch testLabels)
+    liftIO $ putStrLn $ "test aging error " ++ show (testErr * 100)
+
     -- Show some predictions.
     testPreds <- infer model (encodeImageBatch testImages)
+    testAgingPreds <- infer model (encodeImageBatch testAgingImages)
     liftIO $ forM_ ([0..3] :: [Int]) $ \i -> do
         putStrLn ""
         T.putStrLn $ drawMNIST $ testImages !! i
+        T.putStrLn $ drawMNIST $ testAgingImages !! i
         putStrLn $ "expected " ++ show (testLabels !! i)
         putStrLn $ "     got " ++ show (testPreds V.! i)
+        putStrLn $ "(aging) expected " ++ show (testLabels !! i)
+        putStrLn $ "(aging)     got " ++ show (testAgingPreds V.! i)
