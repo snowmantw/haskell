@@ -108,21 +108,18 @@ addNoisy m = m
 -- For example, sensors in one area aging faster than others.
 -- Or their value aging in a predicable way.
 --
-sensorAging :: (RandomGen g) => g -> Int -> Word8 -> MNIST -> MNIST
-sensorAging rGen num aging ms = ms'
-  where rxs = randomRs (0, 255) rGen
+sensorAging :: (RandomGen g) => g -> Int -> ([Int] -> (Int, Word8) -> Word8) -> MNIST -> MNIST
+sensorAging rGen num agingF ms = ms'
+  where rxs = randomRs (0, num - 1) rGen
         rIdxs = take num rxs
         ms' :: MNIST
         ms' = let (readMs, accV) = foldl' mkUpdate (ms, V.fromList []) rIdxs
               in V.update readMs accV
         mkUpdate :: (MNIST, V.Vector (Int, Word8)) -> Int -> (MNIST, V.Vector (Int, Word8))
         mkUpdate (readMs, accV) rIdx = let px = (V.!) readMs rIdx
-                                           px' = updatePixel px
+                                           px' = agingF rIdxs (rIdx, px)
                                        in (readMs, V.snoc accV (rIdx, px'))
-        updatePixel :: Word8 -> Word8
-        updatePixel px | px < aging = 0
-                       | otherwise = fromIntegral (px - aging)  -- 1 may be too small
-          
+
 
 shift :: MNIST -> MNIST
 shift m = m

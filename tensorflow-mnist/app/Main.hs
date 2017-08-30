@@ -14,15 +14,20 @@
 
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedLists #-}
+{-# LANGUAGE ScopedTypeVariables #-} 
 
 import Control.Monad (forM_, when)
 import Control.Monad.IO.Class (liftIO)
 import Data.Int (Int32, Int64)
-import Data.List (genericLength)
+import Data.List (genericLength, groupBy, repeat)
 import qualified Data.Text.IO as T
 import qualified Data.Vector as V
 
-import System.Random (mkStdGen)
+import System.Random (getStdGen)
+import System.Environment (getArgs)
+import Debug.Trace (trace)
+import qualified Data.Map.Strict as Map
+import Data.Word (Word8)
 
 import qualified TensorFlow.Core as TF
 import qualified TensorFlow.Ops as TF hiding (initializedVariable, zeroInitializedVariable)
@@ -103,8 +108,32 @@ createModel = do
               ] errorRateTensor
         }
 
+agingModel :: [Int] -> (Int, Word8) -> Word8
+agingModel pixelIdxs (id, px) = model id px
+  where model id px = let pxF = Map.fromList model_ Map.! id
+                      in pxF px
+        model_ = let (incIdxs, decIdxs) = span odd pixelIdxs
+                 in (incIdxs `zip` repeat incF) ++ (decIdxs `zip` repeat decF)
+        incF :: Word8 -> Word8
+        incF px = 230   -- Directly put to "bright" level
+        decF :: Word8 -> Word8
+        decF _ = 0
+
+blackAgingModel :: [Int] -> (Int, Word8) -> Word8
+blackAgingModel pixelIdxs (id, px) = model id px
+  where model id px = let pxF = Map.fromList model_ Map.! id
+                      in pxF px
+        model_ = pixelIdxs `zip` repeat pxF
+        pxF :: Word8 -> Word8
+        pxF _ = 0
+  
+
 main :: IO ()
 main = TF.runSession $ do
+    [strNumAging] <- liftIO getArgs
+    let numAging = read strNumAging :: Integer
+    rGen <- liftIO getStdGen
+
     -- Read training and test data.
     trainingImages <- liftIO (readMNISTSamples =<< trainingImageData)
     trainingLabels <- liftIO (readMNISTLabels =<< trainingLabelData)
@@ -140,7 +169,7 @@ main = TF.runSession $ do
     liftIO $ putStrLn $ "test error " ++ show (testErr * 100)
 
     -- Aging test.
-    let testAgingImages = fmap (sensorAging (mkStdGen 42) 300 80) testImages
+    let testAgingImages = fmap (sensorAging rGen (fromInteger numAging :: Int) blackAgingModel) testImages
     agingTestErr <- errorRate model (encodeImageBatch testAgingImages)
                                     (encodeLabelBatch testLabels)
     liftIO $ putStrLn $ "test aging error " ++ show (testErr * 100)
