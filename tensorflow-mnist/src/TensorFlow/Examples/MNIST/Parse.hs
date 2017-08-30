@@ -121,6 +121,17 @@ sensorAging rGen num agingF ms = ms'
                                        in (readMs, V.snoc accV (rIdx, px'))
 
 
+colLineModel :: (RandomGen g) => g -> (Int, Int) -> MNIST -> MNIST
+colLineModel rGen (height, width)  = model id px
+  where rxs = randomRs (0, width - 1) rGen
+        rColIdxs = take num rxs
+        -- [ | h <- [0..height-1], repeat colIdx <- rColIdxs ]
+        -- zipWith every element in rColIdxs instead of just one list and list
+        -- = zipWith (*) rColIdxs [0..height-1]
+        -- For every height H, pick pixel at (H,C) -> H*C
+        
+
+
 shift :: MNIST -> MNIST
 shift m = m
 

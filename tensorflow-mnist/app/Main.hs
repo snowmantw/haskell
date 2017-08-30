@@ -126,7 +126,6 @@ blackAgingModel pixelIdxs (id, px) = model id px
         model_ = pixelIdxs `zip` repeat pxF
         pxF :: Word8 -> Word8
         pxF _ = 0
-  
 
 main :: IO ()
 main = TF.runSession $ do
