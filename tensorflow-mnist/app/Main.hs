@@ -108,8 +108,8 @@ createModel = do
               ] errorRateTensor
         }
 
-agingModel :: [Int] -> (Int, Word8) -> Word8
-agingModel pixelIdxs (id, px) = model id px
+bicolorAgingModel :: AgingF
+bicolorAgingModel pixelIdxs (id, px) = model id px
   where model id px = let pxF = Map.fromList model_ Map.! id
                       in pxF px
         model_ = let (incIdxs, decIdxs) = span odd pixelIdxs
@@ -119,7 +119,7 @@ agingModel pixelIdxs (id, px) = model id px
         decF :: Word8 -> Word8
         decF _ = 0
 
-blackAgingModel :: [Int] -> (Int, Word8) -> Word8
+blackAgingModel :: AgingF
 blackAgingModel pixelIdxs (id, px) = model id px
   where model id px = let pxF = Map.fromList model_ Map.! id
                       in pxF px
@@ -129,7 +129,7 @@ blackAgingModel pixelIdxs (id, px) = model id px
 
 main :: IO ()
 main = TF.runSession $ do
-    [strNumAging] <- liftIO getArgs
+    [modelName, strNumAging] <- liftIO getArgs
     let numAging = read strNumAging :: Integer
     rGen <- liftIO getStdGen
 
@@ -168,7 +168,16 @@ main = TF.runSession $ do
     liftIO $ putStrLn $ "test error " ++ show (testErr * 100)
 
     -- Aging test.
-    let testAgingImages = fmap (sensorAging rGen (fromInteger numAging :: Int) blackAgingModel) testImages
+    --let testAgingImages = fmap (sensorAging rGen (fromInteger numAging :: Int) blackAgingModel) testImages
+    --agingTestErr <- errorRate model (encodeImageBatch testAgingImages)
+    --                                (encodeLabelBatch testLabels)
+
+    -- Aging test (black columns).
+    let testAgingImages = case modelName of
+          "black lines" -> fmap (colLineAging rGen (28, 28) (fromInteger numAging :: Int) blackAgingModel) testImages
+          "black dots" -> fmap (sensorAging rGen (fromInteger numAging :: Int) blackAgingModel) testImages
+          "bicolor dots" -> fmap (sensorAging rGen (fromInteger numAging :: Int) bicolorAgingModel) testImages
+
     agingTestErr <- errorRate model (encodeImageBatch testAgingImages)
                                     (encodeLabelBatch testLabels)
     liftIO $ putStrLn $ "test aging error " ++ show (testErr * 100)

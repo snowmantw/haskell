@@ -41,6 +41,7 @@ import qualified Data.Vector as V
 
 -- | Utilities specific to MNIST.
 type MNIST = V.Vector Word8
+type AgingF = [Int] -> (Int, Word8) -> Word8
 
 -- | Produces a unicode rendering of the MNIST digit sample.
 drawMNIST :: MNIST -> Text
@@ -108,7 +109,7 @@ addNoisy m = m
 -- For example, sensors in one area aging faster than others.
 -- Or their value aging in a predicable way.
 --
-sensorAging :: (RandomGen g) => g -> Int -> ([Int] -> (Int, Word8) -> Word8) -> MNIST -> MNIST
+sensorAging :: (RandomGen g) => g -> Int -> AgingF -> MNIST -> MNIST
 sensorAging rGen num agingF ms = ms'
   where rxs = randomRs (0, num - 1) rGen
         rIdxs = take num rxs
@@ -120,17 +121,26 @@ sensorAging rGen num agingF ms = ms'
                                            px' = agingF rIdxs (rIdx, px)
                                        in (readMs, V.snoc accV (rIdx, px'))
 
-
-colLineModel :: (RandomGen g) => g -> (Int, Int) -> MNIST -> MNIST
-colLineModel rGen (height, width)  = model id px
-  where rxs = randomRs (0, width - 1) rGen
-        rColIdxs = take num rxs
-        -- [ | h <- [0..height-1], repeat colIdx <- rColIdxs ]
-        -- zipWith every element in rColIdxs instead of just one list and list
-        -- = zipWith (*) rColIdxs [0..height-1]
-        -- For every height H, pick pixel at (H,C) -> H*C
+-- For every height H, pick pixel at (H,C) -> H*C
+--
+-- 1. Pick every C
+-- 2. Put this C * every H as pixel Id in MNIST
+-- 3. Id is: C*H - 1
+--
+colLineAging :: (RandomGen g) => g -> (Int, Int) -> Int -> AgingF -> MNIST -> MNIST
+colLineAging rGen (height, width) numCol agingF ms = ms'
+  where rxs = randomRs (1, width) rGen
+        rColIdxs = take numCol rxs
+        (_, pxIdxs) = let doFold (hxs,idxs) colId = (hxs, idxs ++ fmap (flip (-) 1 . (* colId)) hxs)
+                      in foldl' doFold ([1..height], []) rColIdxs
+        ms' :: MNIST
+        ms' = let (readMs, accV) = foldl' mkUpdate (ms, V.fromList []) pxIdxs
+              in V.update readMs accV
+        mkUpdate :: (MNIST, V.Vector (Int, Word8)) -> Int -> (MNIST, V.Vector (Int, Word8))
+        mkUpdate (readMs, accV) pxIdx = let px = (V.!) readMs pxIdx
+                                            px' = agingF pxIdxs (pxIdx, px)
+                                        in (readMs, V.snoc accV (pxIdx, px'))
         
-
 
 shift :: MNIST -> MNIST
 shift m = m
